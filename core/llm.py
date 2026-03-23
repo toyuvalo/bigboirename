@@ -26,13 +26,28 @@ def ensure_ollama(config):
         pass
 
     # Try to launch ollama serve — check PATH and known install locations
+    import sys as _sys, os as _os
     ollama_exe = "ollama"
-    import os as _os
-    for candidate in [
-        _os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe"),
-        _os.path.expandvars(r"%LOCALAPPDATA%\Ollama\ollama.exe"),
-        r"C:\Program Files\Ollama\ollama.exe",
-    ]:
+    if _sys.platform == "win32":
+        candidates = [
+            _os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe"),
+            _os.path.expandvars(r"%LOCALAPPDATA%\Ollama\ollama.exe"),
+            r"C:\Program Files\Ollama\ollama.exe",
+        ]
+    elif _sys.platform == "darwin":
+        candidates = [
+            "/usr/local/bin/ollama",
+            "/opt/homebrew/bin/ollama",
+            _os.path.expanduser("~/.local/bin/ollama"),
+            "/Applications/Ollama.app/Contents/Resources/ollama",
+        ]
+    else:
+        candidates = [
+            "/usr/local/bin/ollama",
+            _os.path.expanduser("~/.local/bin/ollama"),
+            "/usr/bin/ollama",
+        ]
+    for candidate in candidates:
         if _os.path.exists(candidate):
             ollama_exe = candidate
             break
@@ -47,7 +62,7 @@ def ensure_ollama(config):
     except FileNotFoundError:
         return False, (
             "Ollama is not installed.\n\n"
-            "Run install.ps1 to install it, or download from https://ollama.com"
+            "Run the installer for your OS, or download from https://ollama.com"
         )
     except Exception as e:
         return False, f"Could not start Ollama: {e}"
@@ -92,8 +107,8 @@ Critical rules:
 Files:
 {file_list}
 
-Respond ONLY with a valid JSON object: original_filename -> new_filename.
-Example: {{"WhatsApp Video 2024-03-18 at 1.33.mp4": "cohen_squad_briefing_2024-03-18.mp4"}}"""
+Respond ONLY with a valid JSON object mapping EXACTLY the filenames listed above (no others) to new filenames.
+Example format only (do not use these names): {{"input_file.mp4": "descriptive_topic_name.mp4"}}"""
 
 
 def _parse_json_response(text):
@@ -159,7 +174,11 @@ def _suggest_ollama(files, config):
         )
 
     text = data.get("response", "")
-    result = _parse_json_response(text)
+    raw = _parse_json_response(text)
+
+    # Filter to only actual input filenames (LLMs often hallucinate extra keys)
+    input_names = {f["name"] for f in files}
+    result = {k: v for k, v in raw.items() if k in input_names}
 
     for f in files:
         result.setdefault(f["name"], f["name"])

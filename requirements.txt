@@ -1,0 +1,7 @@
+# Core LLM backends (install only what you need)
+google-generativeai>=0.8.0   # for provider = "gemini"
+requests>=2.31.0             # for provider = "ollama"
+
+# Optional: Whisper transcription for audio/video hints
+# Uncomment to enable (requires ~1-5 GB for model weights + PyTorch):
+# openai-whisper>=20231117

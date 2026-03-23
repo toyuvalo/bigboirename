@@ -1,0 +1,10 @@
+{
+  "provider": "gemini",
+  "gemini_api_key": "",
+  "ollama_model": "llama3.2",
+  "ollama_url": "http://localhost:11434",
+  "whisper_model": "base",
+  "scan_contents": true,
+  "max_files": 50,
+  "dry_run": false
+}

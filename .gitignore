@@ -1,0 +1,24 @@
+# User credentials — never commit
+config.json
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Whisper model cache
+~/.cache/whisper/
+
+# Undo logs (folder-local, not part of source)
+renamemenu_undo.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

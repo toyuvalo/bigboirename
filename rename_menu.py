@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RenameMenu v1.0.0
+BigBoiRename v1.0.0
 Right-click a folder -> AI suggests clean, consistent filenames (fully local).
 Usage: python rename_menu.py <folder_path>
 """
@@ -22,13 +22,20 @@ from core.renamer import apply_renames
 
 def main():
     if len(sys.argv) < 2:
-        _alert("error", "RenameMenu", "Usage: rename_menu.py <folder_path>")
+        _alert("error", "BigBoiRename", "Usage: rename_menu.py <folder_path>")
         sys.exit(1)
 
-    folder_path = sys.argv[1].strip('"').strip("'")
+    target = sys.argv[1].strip('"').strip("'")
 
-    if not os.path.isdir(folder_path):
-        _alert("error", "RenameMenu", f"Not a valid folder:\n{folder_path}")
+    # Accept either a folder or a single file
+    if os.path.isfile(target):
+        folder_path  = os.path.dirname(target)
+        single_file  = os.path.basename(target)
+    elif os.path.isdir(target):
+        folder_path  = target
+        single_file  = None
+    else:
+        _alert("error", "BigBoiRename", f"Not a valid file or folder:\n{target}")
         sys.exit(1)
 
     cfg = load_config()
@@ -45,6 +52,9 @@ def main():
                 scan_contents=cfg.get("scan_contents", True),
                 max_files=cfg.get("max_files", 50),
             )
+            # Single-file mode: filter to just the right-clicked file
+            if single_file:
+                files = [f for f in files if f["name"] == single_file]
 
             if not files:
                 process_result["error"] = "No files found in this folder."
@@ -81,7 +91,7 @@ def main():
     t.join()
 
     if "error" in process_result:
-        _alert("info", "RenameMenu", process_result["error"])
+        _alert("info", "BigBoiRename", process_result["error"])
         return
 
     files = process_result["files"]
@@ -94,7 +104,7 @@ def main():
 
     if cfg.get("dry_run", False):
         lines = "\n".join(f"  {k}\n  -> {v}" for k, v in approved.items())
-        _alert("info", "RenameMenu - Dry Run", f"No files changed.\n\n{lines}")
+        _alert("info", "BigBoiRename - Dry Run", f"No files changed.\n\n{lines}")
         return
 
     applied, failed = apply_renames(folder_path, approved)
@@ -102,24 +112,24 @@ def main():
     if failed:
         fail_lines = "\n".join(f"  {n}: {e}" for n, e in failed)
         _alert(
-            "warning", "RenameMenu",
+            "warning", "BigBoiRename",
             f"Renamed {len(applied)} file(s).\n\nFailed ({len(failed)}):\n{fail_lines}",
         )
     else:
-        _alert("info", "RenameMenu", f"Renamed {len(applied)} file(s). Undo log saved in folder.")
+        _alert("info", "BigBoiRename", f"Renamed {len(applied)} file(s). Undo log saved in folder.")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _make_loading_window(folder_path):
     win = tk.Tk()
-    win.title("RenameMenu")
+    win.title("BigBoiRename")
     win.geometry("420x110")
     win.resizable(False, False)
     win.configure(bg="#1e1e2e")
     win.attributes("-topmost", True)
 
-    tk.Label(win, text="RenameMenu", bg="#1e1e2e", fg="#89b4fa",
+    tk.Label(win, text="BigBoiRename", bg="#1e1e2e", fg="#89b4fa",
              font=("Segoe UI", 12, "bold")).pack(pady=(16, 4))
     status_var = tk.StringVar(value="Starting...")
     tk.Label(win, textvariable=status_var, bg="#1e1e2e", fg="#a6adc8",

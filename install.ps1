@@ -109,24 +109,31 @@ Write-Host "[..] Installing Python dependencies..." -ForegroundColor Yellow
 Write-Host "[OK] Dependencies installed." -ForegroundColor Green
 
 # ---- 7. Register context menu (HKCU, no admin) ------------------------------
-$PsScript = Join-Path $ScriptDir 'rename_menu.ps1'
-$Command  = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PsScript`" `"%V`""
-$MenuName = "RenameMenu"
-$MenuLabel = "Rename Files with AI"
+$PsScript  = Join-Path $ScriptDir 'rename_menu.ps1'
+$MenuName  = "BigBoiRename"
+$MenuLabel = "BigBoi Rename"
 
-$Keys = @(
-    "HKCU:\Software\Classes\Directory\shell\$MenuName",
-    "HKCU:\Software\Classes\Directory\Background\shell\$MenuName"
+# Folder right-click and folder background use %V (folder path)
+$CmdFolder = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PsScript`" `"%V`""
+# File right-click uses %1 (file path) — script handles both files and folders
+$CmdFile   = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PsScript`" `"%1`""
+
+$entries = @(
+    @{ key = "HKCU:\Software\Classes\Directory\shell\$MenuName";            cmd = $CmdFolder },
+    @{ key = "HKCU:\Software\Classes\Directory\Background\shell\$MenuName"; cmd = $CmdFolder },
+    @{ key = "HKCU:\Software\Classes\*\shell\$MenuName";                    cmd = $CmdFile   }
 )
-foreach ($Key in $Keys) {
+
+foreach ($entry in $entries) {
+    $Key = $entry.key
     if (-not (Test-Path $Key)) { New-Item -Path $Key -Force | Out-Null }
     Set-ItemProperty -Path $Key -Name "(Default)" -Value $MenuLabel
     Set-ItemProperty -Path $Key -Name "Icon"      -Value "shell32.dll,71"
     $CmdKey = "$Key\command"
     if (-not (Test-Path $CmdKey)) { New-Item -Path $CmdKey -Force | Out-Null }
-    Set-ItemProperty -Path $CmdKey -Name "(Default)" -Value $Command
+    Set-ItemProperty -Path $CmdKey -Name "(Default)" -Value $entry.cmd
 }
-Write-Host "[OK] Context menu registered." -ForegroundColor Green
+Write-Host "[OK] Context menu registered (folders + all file types)." -ForegroundColor Green
 
 # ---- 8. Write config.json with the chosen model ----------------------------
 $ConfigPath  = Join-Path $ScriptDir 'config.json'
@@ -143,7 +150,7 @@ $cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigPath -Encoding UTF8
 Write-Host "[OK] config.json: ollama_model = $OllamaModel" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "All done! Right-click any folder -> 'Rename Files with AI'" -ForegroundColor Cyan
+Write-Host "All done! Right-click any file or folder -> 'BigBoi Rename'" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Model:  $OllamaModel  (fully local, no API key needed)" -ForegroundColor Gray
 Write-Host "Config: $ConfigPath" -ForegroundColor Gray

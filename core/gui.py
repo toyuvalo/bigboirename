@@ -1,5 +1,5 @@
 """
-RenameMenu preview GUI — tkinter table of old → new names.
+BigBoiRename preview GUI — tkinter table of old → new names.
 User can edit suggested names and check/uncheck before applying.
 """
 import os
@@ -29,7 +29,7 @@ def show_preview(folder_path, files, suggestions):
     result = {"action": None, "renames": {}}
 
     root = tk.Tk()
-    root.title(f"RenameMenu — {os.path.basename(folder_path)}")
+    root.title(f"BigBoiRename — {os.path.basename(folder_path)}")
     root.geometry("900x560")
     root.minsize(640, 320)
     root.configure(bg=BG)

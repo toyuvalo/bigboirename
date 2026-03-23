@@ -53,7 +53,7 @@ def scan_folder(folder_path, scan_contents=True, max_files=50):
         if not os.path.isfile(full_path):
             continue
         # Skip our own undo log
-        if name == "renamemenu_undo.json":
+        if name == "bigboirename_undo.json":
             continue
 
         _, ext = os.path.splitext(name)

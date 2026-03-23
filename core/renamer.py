@@ -1,5 +1,5 @@
 """
-Applies renames and maintains an undo log (renamemenu_undo.json) in the target folder.
+Applies renames and maintains an undo log (bigboirename_undo.json) in the target folder.
 """
 import os
 import json
@@ -40,10 +40,10 @@ def apply_renames(folder_path, renames):
 
 def undo_last(folder_path):
     """
-    Reverses the most recent rename batch in renamemenu_undo.json.
+    Reverses the most recent rename batch in bigboirename_undo.json.
     Returns (reversed: list[(new, old)], error: str|None)
     """
-    undo_path = os.path.join(folder_path, "renamemenu_undo.json")
+    undo_path = os.path.join(folder_path, "bigboirename_undo.json")
     if not os.path.exists(undo_path):
         return [], "No undo log found in this folder."
 
@@ -90,7 +90,7 @@ def _resolve_conflict(folder_path, name):
 
 
 def _write_undo(folder_path, applied):
-    undo_path = os.path.join(folder_path, "renamemenu_undo.json")
+    undo_path = os.path.join(folder_path, "bigboirename_undo.json")
     if os.path.exists(undo_path):
         with open(undo_path, "r", encoding="utf-8") as f:
             log = json.load(f)

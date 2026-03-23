@@ -1,6 +1,6 @@
 """
-Optional Whisper integration — transcribes first N seconds of audio/video
-to give the LLM a content hint. Gracefully skipped if whisper not installed.
+Whisper transcription + translation for BigBoiRename.
+Always translates output to English so the LLM can name non-English content correctly.
 """
 import os
 import tempfile
@@ -19,10 +19,13 @@ def is_available():
     return _whisper_available
 
 
-def transcribe_hint(path, model_name="base", max_seconds=30, max_chars=200):
+def transcribe_hint(path, model_name="base", max_seconds=60, max_chars=500):
     """
-    Transcribe first max_seconds of an audio/video file.
-    Returns a short transcript string, or '' on any failure.
+    Transcribe audio/video and translate to English.
+    Returns an English transcript snippet, or '' on failure.
+
+    Uses task="translate" so Hebrew, Arabic, French, Spanish, etc.
+    all come out as English — giving the LLM real content to name from.
     """
     if not is_available():
         return ""
@@ -31,8 +34,16 @@ def transcribe_hint(path, model_name="base", max_seconds=30, max_chars=200):
 
         audio_path = _trim_audio(path, max_seconds)
         model = whisper.load_model(model_name)
-        result = model.transcribe(audio_path, fp16=False, verbose=False)
+
+        # translate = transcribe + translate to English in one pass
+        result = model.transcribe(
+            audio_path,
+            task="translate",      # always output English
+            fp16=False,
+            verbose=False,
+        )
         text = result.get("text", "").strip()
+        detected_lang = result.get("language", "unknown")
 
         if audio_path != path:
             try:
@@ -40,7 +51,10 @@ def transcribe_hint(path, model_name="base", max_seconds=30, max_chars=200):
             except Exception:
                 pass
 
-        return text[:max_chars]
+        # Prefix with detected language so LLM knows it was translated
+        prefix = f"[translated from {detected_lang}] " if detected_lang not in ("en", "english") else ""
+        return (prefix + text)[:max_chars]
+
     except Exception:
         return ""
 
@@ -57,10 +71,11 @@ def _trim_audio(path, seconds):
                 "-t", str(seconds),
                 "-ar", "16000",
                 "-ac", "1",
+                "-vn",   # no video stream
                 tmp,
             ],
             capture_output=True,
-            timeout=30,
+            timeout=60,
         )
         if result.returncode == 0 and os.path.exists(tmp):
             return tmp

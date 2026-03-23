@@ -72,28 +72,28 @@ def ensure_ollama(config):
 def _build_prompt(files):
     lines = []
     for f in files:
-        # Escape hint so it can't break the prompt structure
-        hint = f.get("hint", "").replace("\\", "\\\\").replace('"', '\\"')[:150]
-        hint_part = f' | content hint: {hint}' if hint else ""
-        lines.append(f'- {f["name"]}{hint_part}')
+        hint = f.get("hint", "").replace("\\", "\\\\").replace('"', '\\"')[:500]
+        if hint:
+            lines.append(f'- filename: {f["name"]}\n  transcript/content: {hint}')
+        else:
+            lines.append(f'- filename: {f["name"]}  (no transcript available)')
     file_list = "\n".join(lines)
 
-    return f"""You are a file renaming assistant. Suggest clean, consistent filenames for this batch.
+    return f"""You are a file renaming assistant. Your job is to give files SHORT, DESCRIPTIVE names that reflect what is ACTUALLY IN THEM.
 
-Rules:
-- Keep the original file extension EXACTLY unchanged
-- Use descriptive names that reflect the content or subject
-- Be consistent in style across the whole batch (prefer snake_case)
-- Preserve dates if present and meaningful (e.g. 2024-03-18)
-- No special characters except underscores, hyphens, and dots
-- Max 60 characters per name
-- If a filename is already clean and descriptive, return it unchanged
+Critical rules:
+- A transcript or content hint is provided where available — USE IT. The new name must reflect the actual subject matter, not just reformat the old filename.
+- If the transcript says someone is talking about a specific topic, person, event, or location — name the file after THAT.
+- Keep the original file extension EXACTLY unchanged.
+- snake_case, max 60 characters, no special chars except _ - .
+- Preserve dates if meaningful (e.g. 2024-03-18).
+- NEVER return a name that is just the old filename with spaces replaced by underscores — that is lazy and wrong.
 
 Files:
 {file_list}
 
-Respond ONLY with a valid JSON object mapping original filename -> suggested filename.
-Example: {{"WhatsApp Video 2024-03-18 at 1.33.mp4": "birthday_party_2024-03-18.mp4"}}"""
+Respond ONLY with a valid JSON object: original_filename -> new_filename.
+Example: {{"WhatsApp Video 2024-03-18 at 1.33.mp4": "cohen_squad_briefing_2024-03-18.mp4"}}"""
 
 
 def _parse_json_response(text):

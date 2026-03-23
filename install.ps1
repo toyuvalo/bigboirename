@@ -121,7 +121,7 @@ Write-Host "[..] Installing Python dependencies..." -ForegroundColor Yellow
 Write-Host "[OK] Dependencies installed." -ForegroundColor Green
 
 # ---- 7. Register context menu (HKCU, no admin) ------------------------------
-$PsScript  = Join-Path $ScriptDir 'rename_menu.ps1'
+$Vbs       = Join-Path $ScriptDir 'launcher.vbs'
 $MenuName  = "BigBoiRename"
 $MenuLabel = "BigBoi Rename"
 
@@ -149,9 +149,9 @@ foreach ($Key in $CurrentKeys) {
 }
 
 # Folder right-click + folder background use %V (the folder path)
-$CmdFolder = "powershell.exe -ExecutionPolicy Bypass -File `"$PsScript`" `"%V`""
-# File right-click uses %1 (the file path)
-$CmdFile   = "powershell.exe -ExecutionPolicy Bypass -File `"$PsScript`" `"%1`""
+# Use wscript.exe + launcher.vbs — no PowerShell console window ever flashes
+$CmdFolder = "wscript.exe `"$Vbs`" `"%V`""
+$CmdFile   = "wscript.exe `"$Vbs`" `"%1`""
 
 # Folder keys — PowerShell registry provider works fine (no wildcards)
 foreach ($base in @(

@@ -1,12 +1,12 @@
-# One-time registry fix — run this, then delete it.
+# Re-register BigBoiRename context menu using launcher.vbs (no console flash)
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$ps1       = "$ScriptDir\rename_menu.ps1"
+$vbs       = "$ScriptDir\launcher.vbs"
 $MenuName  = "BigBoiRename"
 $MenuLabel = "BigBoi Rename"
-$CmdFolder = "powershell.exe -ExecutionPolicy Bypass -File `"$ps1`" `"%V`""
-$CmdFile   = "powershell.exe -ExecutionPolicy Bypass -File `"$ps1`" `"%1`""
+$CmdAny    = "wscript.exe `"$vbs`" `"%1`""   # files + folder %1
+$CmdFolder = "wscript.exe `"$vbs`" `"%V`""   # folder right-click / background %V
 
-# Folder right-click and folder background (no wildcard — PowerShell provider works fine)
+# Folder keys
 foreach ($base in @(
     "HKCU:\Software\Classes\Directory\shell\$MenuName",
     "HKCU:\Software\Classes\Directory\Background\shell\$MenuName"
@@ -19,8 +19,7 @@ foreach ($base in @(
     Write-Host "[OK] $base"
 }
 
-# *\shell — use .NET Registry class directly to avoid PowerShell wildcard expansion
-# and to preserve quotes in the command value (reg.exe strips them)
+# *\shell — .NET Registry API (PowerShell wildcards + reg.exe both break this key)
 $reg = [Microsoft.Win32.Registry]::CurrentUser
 
 $shellKey = $reg.CreateSubKey("Software\Classes\*\shell\$MenuName")
@@ -29,7 +28,7 @@ $shellKey.SetValue("Icon", "shell32.dll,71")
 $shellKey.Close()
 
 $cmdKey = $reg.CreateSubKey("Software\Classes\*\shell\$MenuName\command")
-$cmdKey.SetValue("", $CmdFile)
+$cmdKey.SetValue("", $CmdAny)
 $cmdKey.Close()
 
 Write-Host "[OK] HKCU\Software\Classes\*\shell\$MenuName"

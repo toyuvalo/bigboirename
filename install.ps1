@@ -136,20 +136,29 @@ $CmdFolder = "powershell.exe -ExecutionPolicy Bypass -File `"$PsScript`" `"%V`""
 # File right-click uses %1 (the file path)
 $CmdFile   = "powershell.exe -ExecutionPolicy Bypass -File `"$PsScript`" `"%1`""
 
-$entries = @(
-    @{ key = "HKCU:\Software\Classes\Directory\shell\$MenuName";            cmd = $CmdFolder },
-    @{ key = "HKCU:\Software\Classes\Directory\Background\shell\$MenuName"; cmd = $CmdFolder },
-    @{ key = "HKCU:\Software\Classes\*\shell\$MenuName";                    cmd = $CmdFile   }
-)
-
-foreach ($entry in $entries) {
-    New-Item -Path $entry.key -Force | Out-Null
-    Set-ItemProperty -Path $entry.key -Name "(Default)" -Value $MenuLabel
-    Set-ItemProperty -Path $entry.key -Name "Icon"      -Value "shell32.dll,71"
-    $CmdKey = "$($entry.key)\command"
-    New-Item -Path $CmdKey -Force | Out-Null
-    Set-ItemProperty -Path $CmdKey -Name "(Default)" -Value $entry.cmd
+# Folder keys — PowerShell registry provider works fine (no wildcards)
+foreach ($base in @(
+    "HKCU:\Software\Classes\Directory\shell\$MenuName",
+    "HKCU:\Software\Classes\Directory\Background\shell\$MenuName"
+)) {
+    New-Item -Path $base -Force | Out-Null
+    Set-ItemProperty -Path $base -Name "(Default)" -Value $MenuLabel
+    Set-ItemProperty -Path $base -Name "Icon"      -Value "shell32.dll,71"
+    New-Item -Path "$base\command" -Force | Out-Null
+    Set-ItemProperty -Path "$base\command" -Name "(Default)" -Value $CmdFolder
 }
+
+# *\shell key — must use .NET Registry API directly.
+# PowerShell's provider wildcard-expands * and reg.exe strips quotes from values.
+$reg = [Microsoft.Win32.Registry]::CurrentUser
+$shellKey = $reg.CreateSubKey("Software\Classes\*\shell\$MenuName")
+$shellKey.SetValue("", $MenuLabel)
+$shellKey.SetValue("Icon", "shell32.dll,71")
+$shellKey.Close()
+$cmdKey = $reg.CreateSubKey("Software\Classes\*\shell\$MenuName\command")
+$cmdKey.SetValue("", $CmdFile)
+$cmdKey.Close()
+
 Write-Host "[OK] Context menu registered (folders + all file types)." -ForegroundColor Green
 
 # ---- 8. Write config.json with the chosen model ----------------------------

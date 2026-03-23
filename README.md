@@ -1,24 +1,15 @@
 # RenameMenu
 
-Right-click any folder → AI suggests clean, consistent filenames for everything inside.
+Right-click any folder → AI suggests clean, consistent filenames for everything inside. Fully local — no API keys, no cloud.
 
 Solves the `WhatsApp Video 2024-03-18 at 1.33.mp4` problem.
 
-![preview](https://raw.githubusercontent.com/toyuvalo/renamemenu/main/docs/preview.png)
+## How it works
 
-## Features
-
-- **Right-click any folder** in Windows Explorer → "Rename Files with AI"
-- **Three modes** — choose what works for you:
-  | Mode | How | Cost | Offline? |
-  |---|---|---|---|
-  | `gemini` | Gemini 2.0 Flash API | Free tier (1500 req/day) | No |
-  | `ollama` | Local LLM via Ollama | Free | Yes |
-  | `whisper-only` | Whisper transcript → name | Free | Yes |
-- **Audio/Video hints** — optionally transcribes first 30s with Whisper to give the LLM real context
-- **Preview table** — see all suggested names before anything changes; edit inline
-- **Undo** — every rename batch is logged to `renamemenu_undo.json` in the folder
-- **No admin required** — context menu registered under HKCU
+1. Right-click a folder → **"Rename Files with AI"**
+2. Local LLM reads filenames (+ optional content hints via Whisper for audio/video)
+3. Preview table — see all suggested names, edit inline, check/uncheck
+4. Apply — renames are logged so you can undo
 
 ## Install
 
@@ -28,46 +19,54 @@ cd renamemenu
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-That's it. On first run you'll be prompted for your Gemini API key, or leave it blank to use Ollama instead.
+The installer will:
+- Install **Ollama** via winget (if not already installed)
+- Pull **llama3.2:1b** (~1.3 GB, one-time download)
+- Create a Python venv and install dependencies
+- Register the right-click menu under HKCU (no admin needed)
 
-## Get a free Gemini API key
+**Total disk footprint: ~1.5 GB**
 
-1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-2. Click **Create API Key**
-3. Paste it when RenameMenu prompts you on first run
+## Requirements
 
-Free tier: 1,500 requests/day, 1M tokens/minute — far more than you'll ever use for renaming.
+- Windows 10/11
+- Python 3.9+
+- Internet for first-time model download (~1.3 GB), offline forever after
 
-## Use Ollama instead (fully local, no API key)
+## Enable Whisper (optional — audio/video hints)
 
-1. Install [Ollama](https://ollama.com)
-2. Run `ollama pull llama3.2`
-3. Edit `config.json` → set `"provider": "ollama"`
-
-## Enable Whisper (audio/video transcription)
-
-Whisper is optional and requires PyTorch (~2GB). To enable:
+Whisper transcribes the first 30 seconds of video/audio files to give the model real content context instead of just the filename.
 
 1. Uncomment `openai-whisper` in `requirements.txt`
-2. Re-run the installer: `powershell -ExecutionPolicy Bypass -File install.ps1`
-3. Set `"whisper_model": "base"` in `config.json` (tiny/base/small/medium)
+2. Re-run: `powershell -ExecutionPolicy Bypass -File install.ps1`
+3. Requires ffmpeg on PATH for audio trimming
 
-The first run will download the model weights automatically.
+Whisper adds ~2 GB (PyTorch + model weights). The `base` model is a good balance of speed and accuracy.
 
-## Config reference
+## Config
 
-`config.json` (created from `config.json.example` on install, gitignored):
+`config.json` (gitignored, created from example on install):
 
 | Key | Default | Description |
 |---|---|---|
-| `provider` | `"gemini"` | `"gemini"` / `"ollama"` / `"whisper-only"` |
-| `gemini_api_key` | `""` | Your Gemini API key |
-| `ollama_model` | `"llama3.2"` | Any model you have pulled in Ollama |
+| `provider` | `"ollama"` | `"ollama"` or `"whisper-only"` |
+| `ollama_model` | `"llama3.2:1b"` | Any model pulled in Ollama (`llama3.2:3b` for better quality) |
 | `ollama_url` | `"http://localhost:11434"` | Ollama server URL |
 | `whisper_model` | `"base"` | `tiny` / `base` / `small` / `medium` |
-| `scan_contents` | `true` | Read text file content / transcribe audio+video |
+| `scan_contents` | `true` | Read text files / transcribe audio+video |
 | `max_files` | `50` | Safety limit per batch |
-| `dry_run` | `false` | Preview renames without applying them |
+| `dry_run` | `false` | Preview renames without applying |
+
+## Disk usage breakdown
+
+| Component | Size |
+|---|---|
+| Ollama app | ~190 MB |
+| llama3.2:1b model | ~1.3 GB |
+| Python venv (requests) | ~15 MB |
+| **Total** | **~1.5 GB** |
+
+Want better rename quality? `ollama pull llama3.2:3b` and update `ollama_model` in config.json (~2.2 GB total).
 
 ## Uninstall
 
@@ -76,9 +75,4 @@ powershell -ExecutionPolicy Bypass -File uninstall.ps1
 ```
 
 Removes the context menu entry. Delete the folder to remove everything.
-
-## Requirements
-
-- Windows 10/11
-- Python 3.9+
-- ffmpeg on PATH (for Whisper audio trimming — optional)
+To remove the Ollama model: `ollama rm llama3.2:1b`

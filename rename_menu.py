@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RenameMenu v1.0.0
-Right-click a folder -> AI suggests clean, consistent filenames.
+Right-click a folder -> AI suggests clean, consistent filenames (fully local).
 Usage: python rename_menu.py <folder_path>
 """
 import sys
@@ -12,7 +12,7 @@ from tkinter import messagebox
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import load_config, ensure_api_key, VERSION
+from config import load_config, VERSION
 from core.scanner import scan_folder
 from core.whisper_helper import transcribe_hint, is_available as whisper_available
 from core.llm import suggest_names
@@ -32,7 +32,6 @@ def main():
         sys.exit(1)
 
     cfg = load_config()
-    ensure_api_key(cfg)
 
     # ── Show loading window while scanning/calling LLM ────────────────────────
     loading, loading_status = _make_loading_window(folder_path)
@@ -61,9 +60,10 @@ def main():
                         )
                         f["hint"] = transcribe_hint(f["path"], model_name=whisper_model)
 
-            provider = cfg.get("provider", "gemini")
+            provider = cfg.get("provider", "ollama")
+            model = cfg.get("ollama_model", "llama3.2:1b")
             loading_status.set(
-                f"Asking {provider} for name suggestions..." if provider != "whisper-only"
+                f"Asking {model} for suggestions..." if provider == "ollama"
                 else "Building names from transcripts..."
             )
             suggestions = suggest_names(files, cfg)
@@ -80,7 +80,6 @@ def main():
     loading.mainloop()
     t.join()
 
-    # ── Handle errors from processing ────────────────────────────────────────
     if "error" in process_result:
         _alert("info", "RenameMenu", process_result["error"])
         return
@@ -88,26 +87,22 @@ def main():
     files = process_result["files"]
     suggestions = process_result["suggestions"]
 
-    # ── Preview GUI ───────────────────────────────────────────────────────────
     approved = show_preview(folder_path, files, suggestions)
 
     if not approved:
         return
 
-    # ── Dry run mode ──────────────────────────────────────────────────────────
     if cfg.get("dry_run", False):
-        lines = "\n".join(f"  {k}\n  → {v}" for k, v in approved.items())
-        _alert("info", "RenameMenu — Dry Run", f"No files changed.\n\n{lines}")
+        lines = "\n".join(f"  {k}\n  -> {v}" for k, v in approved.items())
+        _alert("info", "RenameMenu - Dry Run", f"No files changed.\n\n{lines}")
         return
 
-    # ── Apply ─────────────────────────────────────────────────────────────────
     applied, failed = apply_renames(folder_path, approved)
 
     if failed:
         fail_lines = "\n".join(f"  {n}: {e}" for n, e in failed)
         _alert(
-            "warning",
-            "RenameMenu",
+            "warning", "RenameMenu",
             f"Renamed {len(applied)} file(s).\n\nFailed ({len(failed)}):\n{fail_lines}",
         )
     else:
@@ -126,7 +121,6 @@ def _make_loading_window(folder_path):
 
     tk.Label(win, text="RenameMenu", bg="#1e1e2e", fg="#89b4fa",
              font=("Segoe UI", 12, "bold")).pack(pady=(16, 4))
-
     status_var = tk.StringVar(value="Starting...")
     tk.Label(win, textvariable=status_var, bg="#1e1e2e", fg="#a6adc8",
              font=("Segoe UI", 9)).pack()

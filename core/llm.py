@@ -1,6 +1,6 @@
 """
-LLM backend for RenameMenu.
-Supports: gemini | ollama | whisper-only
+LLM backend for RenameMenu — fully local via Ollama.
+Providers: ollama | whisper-only
 """
 import json
 import re
@@ -46,28 +46,10 @@ def _parse_json_response(text):
 
 
 def _fallback(files):
-    """Return original names unchanged — used when LLM call fails."""
     return {f["name"]: f["name"] for f in files}
 
 
 # ── Providers ─────────────────────────────────────────────────────────────────
-
-def _suggest_gemini(files, config):
-    try:
-        import google.generativeai as genai
-
-        genai.configure(api_key=config["gemini_api_key"])
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(_build_prompt(files))
-        result = _parse_json_response(response.text)
-        # Fill any missing keys with original name
-        for f in files:
-            result.setdefault(f["name"], f["name"])
-        return result
-    except Exception as e:
-        print(f"[RenameMenu] Gemini error: {e}")
-        return _fallback(files)
-
 
 def _suggest_ollama(files, config):
     try:
@@ -75,7 +57,7 @@ def _suggest_ollama(files, config):
 
         url = config.get("ollama_url", "http://localhost:11434") + "/api/generate"
         payload = {
-            "model": config.get("ollama_model", "llama3.2"),
+            "model": config.get("ollama_model", "llama3.2:1b"),
             "prompt": _build_prompt(files),
             "stream": False,
             "format": "json",
@@ -93,10 +75,7 @@ def _suggest_ollama(files, config):
 
 
 def _suggest_whisper_only(files):
-    """
-    Build a name purely from the Whisper hint — no LLM call.
-    Useful as a free, offline fallback for audio/video files.
-    """
+    """Build names from Whisper transcript snippets — no LLM call needed."""
     result = {}
     for f in files:
         hint = f.get("hint", "").strip()
@@ -115,16 +94,10 @@ def _suggest_whisper_only(files):
 def suggest_names(files, config):
     """
     Returns dict {original_filename: suggested_filename} for all files.
-    Provider selected from config["provider"].
+    provider: "ollama" (default) | "whisper-only"
     """
     if not files:
         return {}
-
-    provider = config.get("provider", "gemini")
-
-    if provider == "gemini":
-        return _suggest_gemini(files, config)
-    elif provider == "ollama":
-        return _suggest_ollama(files, config)
-    else:
+    if config.get("provider", "ollama") == "whisper-only":
         return _suggest_whisper_only(files)
+    return _suggest_ollama(files, config)

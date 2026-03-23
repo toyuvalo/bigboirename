@@ -25,7 +25,17 @@ if (-not $PythonExe) {
 Write-Host "[OK] Python: $(& $PythonExe --version 2>&1)" -ForegroundColor Green
 
 # ---- 2. Ollama check + install ----------------------------------------------
+# Check PATH first, then known install locations
 $OllamaExe = Get-Command ollama -ErrorAction SilentlyContinue
+if (-not $OllamaExe) {
+    foreach ($candidate in @(
+        "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe",
+        "$env:LOCALAPPDATA\Ollama\ollama.exe",
+        "C:\Program Files\Ollama\ollama.exe"
+    )) {
+        if (Test-Path $candidate) { $OllamaExe = $candidate; break }
+    }
+}
 if (-not $OllamaExe) {
     Write-Host "[..] Ollama not found. Installing via winget..." -ForegroundColor Yellow
     try {
@@ -41,11 +51,12 @@ if (-not $OllamaExe) {
         exit 1
     }
 } else {
-    Write-Host "[OK] Ollama: $(& ollama --version 2>&1)" -ForegroundColor Green
+    Write-Host "[OK] Ollama: $OllamaExe" -ForegroundColor Green
 }
+$OllamaCmd = if ($OllamaExe -is [System.Management.Automation.CommandInfo]) { $OllamaExe.Source } else { $OllamaExe }
 
 # ---- 3. Model selection -----------------------------------------------------
-$modelList = (& ollama list 2>&1) -join "`n"
+$modelList = (& $OllamaCmd list 2>&1) -join "`n"
 $has1b = $modelList -match 'llama3\.2:1b'
 $has3b = $modelList -match 'llama3\.2:3b'
 
@@ -61,7 +72,13 @@ if ($has3b) {
     Write-Host "  [1] llama3.2:1b  — fast, ~1.3 GB  (recommended)" -ForegroundColor White
     Write-Host "  [2] llama3.2:3b  — better quality, ~2.0 GB" -ForegroundColor White
     Write-Host ""
-    $choice = Read-Host "  Enter 1 or 2 (default: 1)"
+    # Default to 1b if stdin is not interactive (e.g. run via Claude Code)
+    if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+        $choice = Read-Host "  Enter 1 or 2 (default: 1)"
+    } else {
+        $choice = '1'
+        Write-Host "  Non-interactive mode — defaulting to llama3.2:1b" -ForegroundColor DarkGray
+    }
     if ($choice -eq '2') {
         $OllamaModel = 'llama3.2:3b'
         $sizeHint    = '~2.0 GB'
@@ -70,7 +87,7 @@ if ($has3b) {
         $sizeHint    = '~1.3 GB'
     }
     Write-Host "[..] Pulling $OllamaModel ($sizeHint, one-time download)..." -ForegroundColor Yellow
-    & ollama pull $OllamaModel
+    & $OllamaCmd pull $OllamaModel
     Write-Host "[OK] Model ready." -ForegroundColor Green
 }
 
@@ -80,7 +97,7 @@ try {
     Invoke-RestMethod -Uri 'http://localhost:11434' -TimeoutSec 3 -ErrorAction Stop | Out-Null
     Write-Host "[OK] Ollama server already running." -ForegroundColor Green
 } catch {
-    Start-Process -FilePath 'ollama' -ArgumentList 'serve' -WindowStyle Hidden
+    Start-Process -FilePath $OllamaCmd -ArgumentList 'serve' -WindowStyle Hidden
     Start-Sleep -Seconds 2
     Write-Host "[OK] Ollama server started." -ForegroundColor Green
 }

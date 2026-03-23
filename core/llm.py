@@ -25,10 +25,21 @@ def ensure_ollama(config):
     except Exception:
         pass
 
-    # Try to launch ollama serve
+    # Try to launch ollama serve — check PATH and known install locations
+    ollama_exe = "ollama"
+    import os as _os
+    for candidate in [
+        _os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe"),
+        _os.path.expandvars(r"%LOCALAPPDATA%\Ollama\ollama.exe"),
+        r"C:\Program Files\Ollama\ollama.exe",
+    ]:
+        if _os.path.exists(candidate):
+            ollama_exe = candidate
+            break
+
     try:
         subprocess.Popen(
-            ["ollama", "serve"],
+            [ollama_exe, "serve"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),

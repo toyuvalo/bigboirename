@@ -3,8 +3,7 @@
 # Run once after cloning: powershell -ExecutionPolicy Bypass -File install.ps1
 
 $ErrorActionPreference = 'Stop'
-$ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$OllamaModel = 'llama3.2:1b'   # ~1.3 GB — change to llama3.2:3b for better quality
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 Write-Host ""
 Write-Host "RenameMenu Installer" -ForegroundColor Cyan
@@ -46,15 +45,38 @@ if (-not $OllamaExe) {
     Write-Host "[OK] Ollama: $($OllamaExe.Source)" -ForegroundColor Green
 }
 
-# ---- 3. Pull model if not already present -----------------------------------
-Write-Host "[..] Checking for model '$OllamaModel'..." -ForegroundColor Yellow
-$modelList = & ollama list 2>&1
-if ($modelList -notmatch [regex]::Escape($OllamaModel.Split(':')[0])) {
-    Write-Host "[..] Pulling $OllamaModel (~1.3 GB, one-time download)..." -ForegroundColor Yellow
+# ---- 3. Model selection -----------------------------------------------------
+$modelList = (& ollama list 2>&1) -join "`n"
+
+$has1b = $modelList -match 'llama3\.2:1b'
+$has3b = $modelList -match 'llama3\.2:3b'
+
+if ($has3b) {
+    # 3b already installed — use it, no prompt needed
+    $OllamaModel = 'llama3.2:3b'
+    Write-Host "[OK] Found llama3.2:3b already installed — using it." -ForegroundColor Green
+} elseif ($has1b) {
+    # 1b already installed — use it, no prompt needed
+    $OllamaModel = 'llama3.2:1b'
+    Write-Host "[OK] Found llama3.2:1b already installed — using it." -ForegroundColor Green
+} else {
+    # Neither present — ask which to pull
+    Write-Host ""
+    Write-Host "  Choose a model to download:" -ForegroundColor Cyan
+    Write-Host "  [1] llama3.2:1b  — fast, ~1.3 GB  (recommended)" -ForegroundColor White
+    Write-Host "  [2] llama3.2:3b  — better quality, ~2.0 GB" -ForegroundColor White
+    Write-Host ""
+    $choice = Read-Host "  Enter 1 or 2 (default: 1)"
+    if ($choice -eq '2') {
+        $OllamaModel = 'llama3.2:3b'
+        $sizeHint    = '~2.0 GB'
+    } else {
+        $OllamaModel = 'llama3.2:1b'
+        $sizeHint    = '~1.3 GB'
+    }
+    Write-Host "[..] Pulling $OllamaModel ($sizeHint, one-time download)..." -ForegroundColor Yellow
     & ollama pull $OllamaModel
     Write-Host "[OK] Model ready." -ForegroundColor Green
-} else {
-    Write-Host "[OK] Model '$OllamaModel' already present." -ForegroundColor Green
 }
 
 # ---- 4. Ensure Ollama server is running ------------------------------------
@@ -106,13 +128,19 @@ foreach ($Key in $Keys) {
 }
 Write-Host "[OK] Context menu registered." -ForegroundColor Green
 
-# ---- 8. Create config.json from example if not present ---------------------
+# ---- 8. Write config.json with the chosen model ----------------------------
 $ConfigPath  = Join-Path $ScriptDir 'config.json'
 $ExamplePath = Join-Path $ScriptDir 'config.json.example'
-if (-not (Test-Path $ConfigPath) -and (Test-Path $ExamplePath)) {
+
+if (-not (Test-Path $ConfigPath)) {
     Copy-Item $ExamplePath $ConfigPath
-    Write-Host "[OK] config.json created." -ForegroundColor Green
 }
+
+# Update ollama_model to whatever was selected/detected
+$cfg = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+$cfg.ollama_model = $OllamaModel
+$cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigPath -Encoding UTF8
+Write-Host "[OK] config.json: ollama_model = $OllamaModel" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "All done! Right-click any folder -> 'Rename Files with AI'" -ForegroundColor Cyan

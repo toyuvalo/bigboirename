@@ -1,6 +1,9 @@
 # User credentials — never commit
 config.json
 
+# Runtime logs
+error.log
+
 # Python
 .venv/
 __pycache__/

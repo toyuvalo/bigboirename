@@ -1,13 +1,13 @@
-# RenameMenu installer — fully local, no API keys needed.
-# Registers right-click context menu on folders. No admin required.
-# Run once after cloning: powershell -ExecutionPolicy Bypass -File install.ps1
+# BigBoiRename installer — fully local, no API keys needed.
+# Safe to re-run at any time. No admin required.
+# Usage: powershell -ExecutionPolicy Bypass -File install.ps1
 
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 Write-Host ""
-Write-Host "RenameMenu Installer" -ForegroundColor Cyan
-Write-Host "====================" -ForegroundColor Cyan
+Write-Host "BigBoiRename Installer" -ForegroundColor Cyan
+Write-Host "======================" -ForegroundColor Cyan
 Write-Host ""
 
 # ---- 1. Python check --------------------------------------------------------
@@ -15,14 +15,14 @@ $PythonExe = $null
 foreach ($candidate in @('python', 'python3', 'py')) {
     try {
         $ver = & $candidate --version 2>&1
-        if ($ver -match 'Python 3') { $PythonExe = $candidate; break }
+        if ($ver -match 'Python 3\.([89]|1\d)') { $PythonExe = $candidate; break }
     } catch {}
 }
 if (-not $PythonExe) {
-    Write-Host "ERROR: Python 3 not found. Install from python.org." -ForegroundColor Red
+    Write-Host "ERROR: Python 3.8+ not found. Install from python.org." -ForegroundColor Red
     exit 1
 }
-Write-Host "[OK] Python: $($PythonExe)" -ForegroundColor Green
+Write-Host "[OK] Python: $(& $PythonExe --version 2>&1)" -ForegroundColor Green
 
 # ---- 2. Ollama check + install ----------------------------------------------
 $OllamaExe = Get-Command ollama -ErrorAction SilentlyContinue
@@ -30,37 +30,32 @@ if (-not $OllamaExe) {
     Write-Host "[..] Ollama not found. Installing via winget..." -ForegroundColor Yellow
     try {
         winget install Ollama.Ollama --silent --accept-package-agreements --accept-source-agreements
-        # Refresh PATH
         $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
                     [System.Environment]::GetEnvironmentVariable('Path','User')
         $OllamaExe = Get-Command ollama -ErrorAction SilentlyContinue
         if (-not $OllamaExe) { throw "ollama still not on PATH after install" }
         Write-Host "[OK] Ollama installed." -ForegroundColor Green
     } catch {
-        Write-Host "ERROR: Could not install Ollama automatically." -ForegroundColor Red
-        Write-Host "       Download manually from https://ollama.com and re-run this script." -ForegroundColor Yellow
+        Write-Host "ERROR: Could not auto-install Ollama." -ForegroundColor Red
+        Write-Host "       Download manually from https://ollama.com then re-run this script." -ForegroundColor Yellow
         exit 1
     }
 } else {
-    Write-Host "[OK] Ollama: $($OllamaExe.Source)" -ForegroundColor Green
+    Write-Host "[OK] Ollama: $(& ollama --version 2>&1)" -ForegroundColor Green
 }
 
 # ---- 3. Model selection -----------------------------------------------------
 $modelList = (& ollama list 2>&1) -join "`n"
-
 $has1b = $modelList -match 'llama3\.2:1b'
 $has3b = $modelList -match 'llama3\.2:3b'
 
 if ($has3b) {
-    # 3b already installed — use it, no prompt needed
     $OllamaModel = 'llama3.2:3b'
     Write-Host "[OK] Found llama3.2:3b already installed — using it." -ForegroundColor Green
 } elseif ($has1b) {
-    # 1b already installed — use it, no prompt needed
     $OllamaModel = 'llama3.2:1b'
     Write-Host "[OK] Found llama3.2:1b already installed — using it." -ForegroundColor Green
 } else {
-    # Neither present — ask which to pull
     Write-Host ""
     Write-Host "  Choose a model to download:" -ForegroundColor Cyan
     Write-Host "  [1] llama3.2:1b  — fast, ~1.3 GB  (recommended)" -ForegroundColor White
@@ -82,7 +77,7 @@ if ($has3b) {
 # ---- 4. Ensure Ollama server is running ------------------------------------
 Write-Host "[..] Starting Ollama server..." -ForegroundColor Yellow
 try {
-    $resp = Invoke-RestMethod -Uri 'http://localhost:11434' -TimeoutSec 3 -ErrorAction Stop
+    Invoke-RestMethod -Uri 'http://localhost:11434' -TimeoutSec 3 -ErrorAction Stop | Out-Null
     Write-Host "[OK] Ollama server already running." -ForegroundColor Green
 } catch {
     Start-Process -FilePath 'ollama' -ArgumentList 'serve' -WindowStyle Hidden
@@ -113,10 +108,33 @@ $PsScript  = Join-Path $ScriptDir 'rename_menu.ps1'
 $MenuName  = "BigBoiRename"
 $MenuLabel = "BigBoi Rename"
 
-# Folder right-click and folder background use %V (folder path)
-$CmdFolder = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PsScript`" `"%V`""
-# File right-click uses %1 (file path) — script handles both files and folders
-$CmdFile   = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PsScript`" `"%1`""
+# Remove old keys (RenameMenu was the previous name — clean up if present)
+$OldKeys = @(
+    "HKCU:\Software\Classes\Directory\shell\RenameMenu",
+    "HKCU:\Software\Classes\Directory\Background\shell\RenameMenu",
+    "HKCU:\Software\Classes\*\shell\RenameMenu"
+)
+foreach ($Key in $OldKeys) {
+    if (Test-Path $Key) {
+        Remove-Item -Path $Key -Recurse -Force
+        Write-Host "[OK] Removed old key: $Key" -ForegroundColor DarkGray
+    }
+}
+
+# Remove existing BigBoiRename keys before re-registering (idempotent)
+$CurrentKeys = @(
+    "HKCU:\Software\Classes\Directory\shell\$MenuName",
+    "HKCU:\Software\Classes\Directory\Background\shell\$MenuName",
+    "HKCU:\Software\Classes\*\shell\$MenuName"
+)
+foreach ($Key in $CurrentKeys) {
+    if (Test-Path $Key) { Remove-Item -Path $Key -Recurse -Force }
+}
+
+# Folder right-click + folder background use %V (the folder path)
+$CmdFolder = "powershell.exe -ExecutionPolicy Bypass -File `"$PsScript`" `"%V`""
+# File right-click uses %1 (the file path)
+$CmdFile   = "powershell.exe -ExecutionPolicy Bypass -File `"$PsScript`" `"%1`""
 
 $entries = @(
     @{ key = "HKCU:\Software\Classes\Directory\shell\$MenuName";            cmd = $CmdFolder },
@@ -125,12 +143,11 @@ $entries = @(
 )
 
 foreach ($entry in $entries) {
-    $Key = $entry.key
-    if (-not (Test-Path $Key)) { New-Item -Path $Key -Force | Out-Null }
-    Set-ItemProperty -Path $Key -Name "(Default)" -Value $MenuLabel
-    Set-ItemProperty -Path $Key -Name "Icon"      -Value "shell32.dll,71"
-    $CmdKey = "$Key\command"
-    if (-not (Test-Path $CmdKey)) { New-Item -Path $CmdKey -Force | Out-Null }
+    New-Item -Path $entry.key -Force | Out-Null
+    Set-ItemProperty -Path $entry.key -Name "(Default)" -Value $MenuLabel
+    Set-ItemProperty -Path $entry.key -Name "Icon"      -Value "shell32.dll,71"
+    $CmdKey = "$($entry.key)\command"
+    New-Item -Path $CmdKey -Force | Out-Null
     Set-ItemProperty -Path $CmdKey -Name "(Default)" -Value $entry.cmd
 }
 Write-Host "[OK] Context menu registered (folders + all file types)." -ForegroundColor Green
@@ -143,15 +160,18 @@ if (-not (Test-Path $ConfigPath)) {
     Copy-Item $ExamplePath $ConfigPath
 }
 
-# Update ollama_model to whatever was selected/detected
-$cfg = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-$cfg.ollama_model = $OllamaModel
-$cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigPath -Encoding UTF8
-Write-Host "[OK] config.json: ollama_model = $OllamaModel" -ForegroundColor Green
+try {
+    $cfg = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+    $cfg.ollama_model = $OllamaModel
+    $cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigPath -Encoding UTF8
+    Write-Host "[OK] config.json: ollama_model = $OllamaModel" -ForegroundColor Green
+} catch {
+    Write-Host "[WARN] Could not update config.json: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "All done! Right-click any file or folder -> 'BigBoi Rename'" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Model:  $OllamaModel  (fully local, no API key needed)" -ForegroundColor Gray
+Write-Host "Model:  $OllamaModel  (fully local, no internet after this)" -ForegroundColor Gray
 Write-Host "Config: $ConfigPath" -ForegroundColor Gray
 Write-Host ""

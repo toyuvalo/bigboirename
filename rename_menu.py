@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 BigBoiRename v1.0.0
-Right-click a folder -> AI suggests clean, consistent filenames (fully local).
-Usage: python rename_menu.py <folder_path>
+Right-click a folder or file -> AI suggests clean, consistent filenames (fully local).
+Usage: python rename_menu.py <folder_or_file_path>
 """
 import sys
 import os
@@ -22,66 +22,81 @@ from core.renamer import apply_renames
 
 def main():
     if len(sys.argv) < 2:
-        _alert("error", "BigBoiRename", "Usage: rename_menu.py <folder_path>")
+        _alert("error", "BigBoiRename", "Usage: rename_menu.py <folder_or_file_path>")
         sys.exit(1)
 
-    target = sys.argv[1].strip('"').strip("'")
+    # Strip any surrounding quotes Windows sometimes adds
+    target = sys.argv[1].strip().strip('"').strip("'").strip()
 
-    # Accept either a folder or a single file
+    # Normalize path separators
+    target = os.path.normpath(target)
+
     if os.path.isfile(target):
-        folder_path  = os.path.dirname(target)
-        single_file  = os.path.basename(target)
+        folder_path = os.path.dirname(target)
+        single_file = os.path.basename(target)
     elif os.path.isdir(target):
-        folder_path  = target
-        single_file  = None
+        folder_path = target
+        single_file = None
     else:
-        _alert("error", "BigBoiRename", f"Not a valid file or folder:\n{target}")
+        _alert("error", "BigBoiRename",
+               f"Path not found:\n{target}\n\nMake sure the drive is connected.")
         sys.exit(1)
 
     cfg = load_config()
 
-    # ── Show loading window while scanning/calling LLM ────────────────────────
-    loading, loading_status = _make_loading_window(folder_path)
+    # ── Loading window ────────────────────────────────────────────────────────
+    loading, status_var = _make_loading_window(
+        single_file or os.path.basename(folder_path)
+    )
     process_result = {}
 
     def _process():
         try:
-            loading_status.set("Scanning files...")
+            status_var.set("Scanning files...")
             files = scan_folder(
                 folder_path,
                 scan_contents=cfg.get("scan_contents", True),
                 max_files=cfg.get("max_files", 50),
             )
-            # Single-file mode: filter to just the right-clicked file
+
             if single_file:
                 files = [f for f in files if f["name"] == single_file]
 
             if not files:
-                process_result["error"] = "No files found in this folder."
+                process_result["error"] = (
+                    f"No files found in:\n{folder_path}"
+                    if not single_file
+                    else f"Could not scan file:\n{single_file}"
+                )
                 loading.after(0, loading.destroy)
                 return
 
+            # Whisper hints
             if cfg.get("scan_contents", True) and whisper_available():
                 whisper_model = cfg.get("whisper_model", "base")
                 for i, f in enumerate(files):
                     if f["type"] in ("video", "audio") and not f["hint"]:
-                        loading_status.set(
+                        status_var.set(
                             f"Transcribing {i+1}/{len(files)}: {f['name'][:40]}..."
                         )
                         f["hint"] = transcribe_hint(f["path"], model_name=whisper_model)
 
-            provider = cfg.get("provider", "ollama")
             model = cfg.get("ollama_model", "llama3.2:1b")
-            loading_status.set(
-                f"Asking {model} for suggestions..." if provider == "ollama"
+            provider = cfg.get("provider", "ollama")
+            status_var.set(
+                f"Asking {model}..." if provider == "ollama"
                 else "Building names from transcripts..."
             )
-            suggestions = suggest_names(files, cfg)
 
+            suggestions = suggest_names(files, cfg)
             process_result["files"] = files
             process_result["suggestions"] = suggestions
-        except Exception as e:
+
+        except RuntimeError as e:
+            # User-readable errors from llm.py (Ollama not running, model missing, etc.)
             process_result["error"] = str(e)
+        except Exception as e:
+            process_result["error"] = f"Unexpected error: {type(e).__name__}: {e}"
         finally:
             loading.after(0, loading.destroy)
 
@@ -91,14 +106,13 @@ def main():
     t.join()
 
     if "error" in process_result:
-        _alert("info", "BigBoiRename", process_result["error"])
+        _alert("error", "BigBoiRename", process_result["error"])
         return
 
     files = process_result["files"]
     suggestions = process_result["suggestions"]
 
     approved = show_preview(folder_path, files, suggestions)
-
     if not approved:
         return
 
@@ -116,12 +130,13 @@ def main():
             f"Renamed {len(applied)} file(s).\n\nFailed ({len(failed)}):\n{fail_lines}",
         )
     else:
-        _alert("info", "BigBoiRename", f"Renamed {len(applied)} file(s). Undo log saved in folder.")
+        _alert("info", "BigBoiRename",
+               f"Renamed {len(applied)} file(s).\nUndo log saved in folder.")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_loading_window(folder_path):
+def _make_loading_window(label):
     win = tk.Tk()
     win.title("BigBoiRename")
     win.geometry("420x110")
@@ -131,12 +146,11 @@ def _make_loading_window(folder_path):
 
     tk.Label(win, text="BigBoiRename", bg="#1e1e2e", fg="#89b4fa",
              font=("Segoe UI", 12, "bold")).pack(pady=(16, 4))
-    status_var = tk.StringVar(value="Starting...")
-    tk.Label(win, textvariable=status_var, bg="#1e1e2e", fg="#a6adc8",
+    sv = tk.StringVar(value="Starting...")
+    tk.Label(win, textvariable=sv, bg="#1e1e2e", fg="#a6adc8",
              font=("Segoe UI", 9)).pack()
-
     win.update()
-    return win, status_var
+    return win, sv
 
 
 def _alert(level, title, msg):

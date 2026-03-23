@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-BigBoiRename v1.0.0
-Right-click a folder or file -> AI suggests clean, consistent filenames (fully local).
+BigBoiRename v1.1.0
+Right-click a folder or file -> AI suggests clean, descriptive filenames.
 Usage: python rename_menu.py <folder_or_file_path>
 """
 import sys
@@ -71,8 +71,10 @@ def main():
                 loading.after(0, loading.destroy)
                 return
 
-            # Whisper hints
-            if cfg.get("scan_contents", True) and whisper_available():
+            provider = cfg.get("provider", "gemini")
+
+            # Whisper hints — only used for non-gemini providers (gemini has vision)
+            if provider != "gemini" and cfg.get("scan_contents", True) and whisper_available():
                 whisper_model = cfg.get("whisper_model", "base")
                 for i, f in enumerate(files):
                     if f["type"] in ("video", "audio") and not f["hint"]:
@@ -81,12 +83,13 @@ def main():
                         )
                         f["hint"] = transcribe_hint(f["path"], model_name=whisper_model)
 
-            model = cfg.get("ollama_model", "llama3.2:1b")
-            provider = cfg.get("provider", "ollama")
-            status_var.set(
-                f"Asking {model}..." if provider == "ollama"
-                else "Building names from transcripts..."
-            )
+            if provider == "gemini":
+                status_var.set("Analyzing with Gemini...")
+            elif provider == "ollama":
+                model = cfg.get("ollama_model", "llama3.2:1b")
+                status_var.set(f"Asking {model}...")
+            else:
+                status_var.set("Building names from transcripts...")
 
             suggestions = suggest_names(files, cfg)
             process_result["files"] = files

@@ -1,6 +1,7 @@
-# All inference runs locally — no cloud APIs.
 requests>=2.31.0
 
-# Whisper: transcribe + translate audio/video to English for intelligent naming.
-# Required for video/audio files. Pulls PyTorch on first install (~700MB).
-openai-whisper>=20231117
+# Gemini API (default provider) — vision for images/video, text for everything else.
+google-genai>=1.0.0
+
+# Whisper: optional, used only when provider=whisper-only. Pulls PyTorch (~700MB).
+# openai-whisper>=20231117

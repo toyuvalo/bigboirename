@@ -5,13 +5,14 @@ config.json lives next to this file and is gitignored — never committed.
 import json
 import os
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(_DIR, "config.json")
 
 DEFAULTS = {
-    "provider": "ollama",
+    "provider": "gemini",
+    "gemini_api_key": "",
     "ollama_model": "llama3.2:1b",
     "ollama_url": "http://localhost:11434",
     "whisper_model": "base",

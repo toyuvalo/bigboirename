@@ -1,0 +1,114 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps + PyInstaller
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build BigBoiRename.exe
+        run: |
+          pyinstaller --onefile --windowed `
+            --name BigBoiRename `
+            --icon icon.ico `
+            --add-data "icon.ico;." `
+            rename_menu.py
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="$GITHUB_REF_NAME"
+            version="${tag#v}"
+            rolling="false"
+          else
+            tag="latest"
+            version="1.0.0"
+            rolling="true"
+          fi
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "rolling=$rolling"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build one-click installer (Inno Setup)
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & "$iscc" "/DMyAppVersion=${{ steps.meta.outputs.version }}" installer\renamemenu.iss
+          if (-not (Test-Path "installer\BigBoiRename-Setup.exe")) {
+            throw "BigBoiRename-Setup.exe was not produced"
+          }
+
+      - name: Package portable zip
+        run: |
+          Compress-Archive -Path dist/* -DestinationPath dist/BigBoiRename-windows.zip
+
+      - name: Move rolling 'latest' tag
+        if: steps.meta.outputs.rolling == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ref = 'tags/latest';
+            const sha = context.sha;
+            try {
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref,
+                sha,
+                force: true,
+              });
+            } catch (err) {
+              if (err.status === 422 || err.status === 404) {
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `refs/${ref}`,
+                  sha,
+                });
+              } else {
+                throw err;
+              }
+            }
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.rolling == 'true' && 'BigBoiRename (latest)' || steps.meta.outputs.tag }}
+          make_latest: "true"
+          prerelease: false
+          files: |
+            installer/BigBoiRename-Setup.exe
+            dist/BigBoiRename-windows.zip
+          generate_release_notes: ${{ steps.meta.outputs.rolling == 'false' }}
+          body: ${{ steps.meta.outputs.rolling == 'true' && 'Rolling build from latest master. Requires Ollama installed separately — see README.' || '' }}

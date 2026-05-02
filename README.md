@@ -15,7 +15,13 @@ Solves the `WhatsApp Video 2024-03-18 at 1.33.mp4` problem.
 
 ## Install
 
-### Windows
+### Option A — one-click installer (Windows, recommended)
+
+Download `BigBoiRename-Setup.exe` from the [latest release](https://github.com/toyuvalo/bigboirename/releases/latest) and run it. Registers the right-click menu for files, folders, and folder backgrounds; creates shortcuts; no admin needed.
+
+**Requires Ollama installed separately** — the installer detects if missing and warns, but won't proceed fully without it. Get it from [ollama.com](https://ollama.com), then run `ollama pull llama3.2:1b` before using BigBoiRename.
+
+### Option B — Windows from source (full auto-install)
 
 ```powershell
 git clone https://github.com/toyuvalo/bigboirename.git
@@ -100,6 +106,18 @@ Whisper adds ~2 GB (PyTorch + model weights). The `base` model is a good balance
 | `scan_contents` | `true` | Read text files / transcribe audio+video |
 | `max_files` | `50` | Safety limit per batch |
 | `dry_run` | `false` | Preview renames without applying |
+
+---
+
+## Architecture
+
+| File | Role |
+|---|---|
+| `rename_menu.py` | Entry point invoked from the right-click menu — scans the target folder, calls the LLM, renders the preview UI, applies/logs renames |
+| `config.py` | Loads `config.json` and exposes typed defaults (provider, model, scan_contents, max_files, etc.) |
+| `core/` | LLM client, file scanners, Whisper transcription helpers |
+| `rename_menu.ps1` / `launcher.vbs` | Windows shims that activate the venv before invoking `rename_menu.py` |
+| `install.ps1` / `install-mac.sh` / `install-linux.sh` | Per-OS installers that pull Ollama, set up venv, register context-menu entries |
 
 ---
 

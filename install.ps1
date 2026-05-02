@@ -1,4 +1,4 @@
-# BigBoiRename installer — fully local, no API keys needed.
+# BigBoiRename installer - fully local, no API keys needed.
 # Safe to re-run at any time. No admin required.
 # Usage: powershell -ExecutionPolicy Bypass -File install.ps1
 
@@ -62,22 +62,22 @@ $has3b = $modelList -match 'llama3\.2:3b'
 
 if ($has3b) {
     $OllamaModel = 'llama3.2:3b'
-    Write-Host "[OK] Found llama3.2:3b already installed — using it." -ForegroundColor Green
+    Write-Host "[OK] Found llama3.2:3b already installed - using it." -ForegroundColor Green
 } elseif ($has1b) {
     $OllamaModel = 'llama3.2:1b'
-    Write-Host "[OK] Found llama3.2:1b already installed — using it." -ForegroundColor Green
+    Write-Host "[OK] Found llama3.2:1b already installed - using it." -ForegroundColor Green
 } else {
     Write-Host ""
     Write-Host "  Choose a model to download:" -ForegroundColor Cyan
-    Write-Host "  [1] llama3.2:1b  — fast, ~1.3 GB  (recommended)" -ForegroundColor White
-    Write-Host "  [2] llama3.2:3b  — better quality, ~2.0 GB" -ForegroundColor White
+    Write-Host "  [1] llama3.2:1b  - fast, ~1.3 GB  (recommended)" -ForegroundColor White
+    Write-Host "  [2] llama3.2:3b  - better quality, ~2.0 GB" -ForegroundColor White
     Write-Host ""
     # Default to 1b if stdin is not interactive (e.g. run via Claude Code)
     if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
         $choice = Read-Host "  Enter 1 or 2 (default: 1)"
     } else {
         $choice = '1'
-        Write-Host "  Non-interactive mode — defaulting to llama3.2:1b" -ForegroundColor DarkGray
+        Write-Host "  Non-interactive mode - defaulting to llama3.2:1b" -ForegroundColor DarkGray
     }
     if ($choice -eq '2') {
         $OllamaModel = 'llama3.2:3b'
@@ -125,7 +125,7 @@ $Vbs       = Join-Path $ScriptDir 'launcher.vbs'
 $MenuName  = "BigBoiRename"
 $MenuLabel = "BigBoi Rename"
 
-# Remove old keys (RenameMenu was the previous name — clean up if present)
+# Remove old keys (RenameMenu was the previous name - clean up if present)
 $OldKeys = @(
     "HKCU:\Software\Classes\Directory\shell\RenameMenu",
     "HKCU:\Software\Classes\Directory\Background\shell\RenameMenu",
@@ -149,11 +149,11 @@ foreach ($Key in $CurrentKeys) {
 }
 
 # Folder right-click + folder background use %V (the folder path)
-# Use wscript.exe + launcher.vbs — no PowerShell console window ever flashes
+# Use wscript.exe + launcher.vbs - no PowerShell console window ever flashes
 $CmdFolder = "wscript.exe `"$Vbs`" `"%V`""
 $CmdFile   = "wscript.exe `"$Vbs`" `"%1`""
 
-# Folder keys — PowerShell registry provider works fine (no wildcards)
+# Folder keys - PowerShell registry provider works fine (no wildcards)
 foreach ($base in @(
     "HKCU:\Software\Classes\Directory\shell\$MenuName",
     "HKCU:\Software\Classes\Directory\Background\shell\$MenuName"
@@ -165,7 +165,7 @@ foreach ($base in @(
     Set-ItemProperty -Path "$base\command" -Name "(Default)" -Value $CmdFolder
 }
 
-# *\shell key — must use .NET Registry API directly.
+# *\shell key - must use .NET Registry API directly.
 # PowerShell's provider wildcard-expands * and reg.exe strips quotes from values.
 $reg = [Microsoft.Win32.Registry]::CurrentUser
 $shellKey = $reg.CreateSubKey("Software\Classes\*\shell\$MenuName")
